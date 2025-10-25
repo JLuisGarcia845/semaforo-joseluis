@@ -1,0 +1,181 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Semáforo Revisión de Personal</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding-top: 50px;
+    }
+    h1 {
+      font-size: 48px;
+      color: #0ff;
+      text-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
+    }
+    .circulo {
+      width: 250px;
+      height: 250px;
+      border-radius: 50%;
+      background-color: #555;
+      margin: 30px auto;
+      box-shadow: 0 0 20px #000;
+      transition: background-color 0.5s, box-shadow 0.5s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      font-size: 22px;
+      font-weight: bold;
+      text-align: center;
+      padding: 20px;
+      line-height: 1.4;
+    }
+    .verde {
+      background-color: green !important;
+      box-shadow: 0 0 40px green;
+    }
+    .rojo {
+      background-color: red !important;
+      box-shadow: 0 0 40px red;
+    }
+    .pensando {
+      animation: parpadeo 1s infinite;
+    }
+    @keyframes parpadeo {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin: 10px;
+      cursor: pointer;
+    }
+    .contador {
+      font-size: 20px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Semáforo Revisión de Personal</h1>
+  <div id="circulo" class="circulo">
+    <div id="mensaje">Esperando...</div>
+  </div>
+  <button onclick="pasarSemaforo()">Pasar Semáforo</button>
+  <button onclick="reiniciar()">Reiniciar</button>
+  <button onclick="exportarExcel()">Exportar a Excel</button>
+  <div class="contador">
+    <p>Verde: <span id="contadorVerde">0</span></p>
+    <p>Rojo: <span id="contadorRojo">0</span></p>
+    <p>Total intentos: <span id="totalIntentos">0</span></p>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    let contadorVerde = 0;
+    let contadorRojo = 0;
+    let registros = [];
+    let intentos = 0;
+    let lote = [];
+    let audioCtx;
+
+    document.addEventListener('click', () => {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } else if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    });
+
+    function playTone(frequency, duration = 0.5, volume = 0.8, type = 'sine') {
+      if (!audioCtx) return;
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + duration);
+    }
+
+    function pasarSemaforo() {
+      const circulo = document.getElementById('circulo');
+      const mensaje = document.getElementById('mensaje');
+      circulo.className = 'circulo pensando';
+      mensaje.textContent = 'Procesando...';
+
+      setTimeout(() => {
+        intentos++;
+        document.getElementById('totalIntentos').textContent = intentos;
+
+        if (lote.length === 0) {
+          lote = Array(5).fill('verde').concat(Array(5).fill('rojo'));
+          lote = lote.sort(() => Math.random() - 0.5);
+        }
+
+        let resultado = lote.pop();
+        const ahora = new Date();
+        const fecha = ahora.toLocaleDateString();
+        const hora = ahora.toLocaleTimeString();
+
+        circulo.className = 'circulo';
+        if (resultado === 'verde') {
+          contadorVerde++;
+          circulo.classList.add('verde');
+          mensaje.innerHTML = 'VERDE<br>Revisión Normal';
+          playTone(880, 0.5, 0.8, 'sine');
+        } else {
+          contadorRojo++;
+          circulo.classList.add('rojo');
+          mensaje.innerHTML = 'ROJO<br>Revisión Minuciosa';
+          playTone(120, 0.7, 1.0, 'square');
+        }
+
+        document.getElementById('contadorVerde').textContent = contadorVerde;
+        document.getElementById('contadorRojo').textContent = contadorRojo;
+
+        registros.push({ Fecha: fecha, Hora: hora, Resultado: resultado });
+      }, 1500);
+    }
+
+    function reiniciar() {
+      contadorVerde = 0;
+      contadorRojo = 0;
+      registros = [];
+      intentos = 0;
+      lote = [];
+      document.getElementById('contadorVerde').textContent = 0;
+      document.getElementById('contadorRojo').textContent = 0;
+      document.getElementById('totalIntentos').textContent = 0;
+      const circulo = document.getElementById('circulo');
+      const mensaje = document.getElementById('mensaje');
+      circulo.className = 'circulo';
+      mensaje.textContent = 'Esperando...';
+    }
+
+    function exportarExcel() {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(registros);
+      XLSX.utils.book_append_sheet(wb, ws, "Simulaciones");
+
+      const resumen = [
+        { Color: "Verde", Cantidad: contadorVerde },
+        { Color: "Rojo", Cantidad: contadorRojo },
+        { Total: intentos }
+      ];
+      const wsResumen = XLSX.utils.json_to_sheet(resumen);
+      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
+
+      XLSX.writeFile(wb, "simulador_semaforo.xlsx");
+    }
+  </script>
+</body>
+</html>
